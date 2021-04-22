@@ -1,0 +1,223 @@
+#! /bin/bash
+datafilepath="datafile$$"
+func_call=$1
+
+if [ "$func_call" = "dims" ] || [ "$func_call" = "transpose" ] || [ "$func_call" = "mean" ]; then
+    if [ "$#" = "1" ]; then
+        cat > "$datafilepath"
+    elif [ "$#" = "2" ]; then
+        if [ -a "$2" ] && [ -r "$2" ]; then
+            datafilepath="${@:2}"
+        else
+            echo "file does not exist or is unreadable" 1>&2
+            exit 1
+        fi
+    else
+        echo "invalid arguments" 1>&2
+        exit 1
+    fi
+elif [ "$func_call" = "add" ]; then
+    if [ "$#" -ne "3" ]; then
+        echo "invalid arguments for add" 1>&2
+        exit 1
+    else
+        datafilepath="${@:2}"
+    fi
+fi
+
+dims() {
+
+    lineNum=0
+    while read myLine
+    do
+        cols=0
+        lineNum=`expr $lineNum + 1`
+        for i in $myLine
+        do
+            cols=`expr $cols + 1`
+        done
+    done < $datafilepath
+    echo "$lineNum $cols"
+
+    rm -f "datafile$$"
+}
+
+transpose() {
+
+    # find the # of columns in the matrix: cut the first line and count the # nums
+    oneline=$(head -n1 $datafilepath)
+    col=0
+    for i in $oneline
+    do
+        cols=`expr $cols + 1`
+    done
+
+    # for each column of the matrix
+    # cut the column and then paste it into a single row
+    for (( i=1; i<="$cols"; i++ ))
+    do
+        cut -f"$i" $datafilepath | paste -s
+    done
+
+    rm -f "datafile$$"
+
+}
+
+mean() {
+
+    # find # cols in matrix
+    firstrow=$(head -n1 $datafilepath)
+    cols=0
+    for i in $firstrow
+    do
+        cols=`expr $cols + 1`
+    done
+    #echo "cols: $cols"
+
+    # find # rows in matrix
+    firstcol=$(cut -f1 $datafilepath)
+    rows=0
+    for i in $firstcol
+    do
+        rows=`expr $rows + 1`
+    done
+    #echo "rows: $rows"
+
+    # for each column in matrix
+    # add each number in column until you get the total sum for that column
+    # find average and output average to file
+    TMP="myFile"
+    for (( i=1; i<="$cols"; i++ ))
+    do
+        sum=0
+        average=0
+        oneline=$(cut -f"$i" $datafilepath)
+        for j in $oneline
+        do
+            #echo "$j"
+            sum=`expr $sum + $j`
+        done
+        #echo "sum of column: $sum"
+        average=$(( ($sum + ($rows/2)*( ($sum>0)*2-1 )) / $rows ))
+        #echo "average: $average"
+        echo $average >> $TMP
+        #echo "next column"
+    done
+
+    #cat $TMP | tr '\n' '\t' > "TMP$$"
+    #cat -A $TMP$$
+    cut -f1 $TMP | paste -s
+
+    rm -f "datafile$$"
+    #rm -f "TMP$$"
+    rm -f "$TMP"
+}
+
+add() {
+
+    #echo "in add"
+    #echo $1
+    #echo $2
+
+    matrix_left=$1
+    matrix_right=$2
+
+    ##### find # cols in matrix_left
+    firstrow=$(head -n1 $matrix_left)
+    cols_lmatrix=0
+    for i in $firstrow
+    do
+        cols_lmatrix=`expr $cols_lmatrix + 1`
+    done
+    #echo "cols of lmatrix: $cols_lmatrix"
+
+    ##### find # cols in matrix_right
+    firstrow=$(head -n1 $matrix_right)
+    cols_rmatrix=0
+    for i in $firstrow
+    do
+        cols_rmatrix=`expr $cols_rmatrix + 1`
+    done
+    #echo "cols of rmatrix: $cols_rmatrix"
+
+    if [ $cols_lmatrix -ne $cols_rmatrix ]; then
+        echo "matrices don't have same dims" 1>&2
+        exit 1
+    fi
+
+    ##### find # rows in matrix_left
+    firstcol=$(cut -f1 $matrix_left)
+    rows_lmatrix=0
+    for i in $firstcol
+    do
+        rows_lmatrix=`expr $rows_lmatrix + 1`
+    done
+    #echo "rows of lmatrix: $rows_lmatrix"
+
+    ##### find # rows in matrix_right
+    firstcol=$(cut -f1 $matrix_right)
+    rows_rmatrix=0
+    for i in $firstcol
+    do
+        rows_rmatrix=`expr $rows_rmatrix + 1`
+    done
+    #echo "rows of lmatrix: $rows_rmatrix"
+
+    if [ $rows_lmatrix -ne $rows_rmatrix ]; then
+        echo "matrices don't have same dims" 1>&2
+        exit 1
+    fi
+
+    newmatrix="tempadd"
+    newmatrix2="addedmatrix"
+    while read line1 <&3 && read line2 <&4
+    do
+        #echo "here"
+        echo $line1 >> $newmatrix 
+        echo $line2 >> $newmatrix
+        for (( i=1; i<="$cols_lmatrix"; i++ ))
+        do
+            sum=0
+            oneline=$(cut -d " " -f"$i" $newmatrix)
+            #echo "one line: $oneline"
+            for j in $oneline
+            do
+                #echo "num by num in col"
+                #echo "$j"
+                sum=`expr $sum + $j`
+            done
+            #echo "sum of $i column: $sum"
+            echo $sum >> $newmatrix2
+        done
+        cut -f1 $newmatrix2 | paste -s
+        rm -f $newmatrix2
+        rm -f $newmatrix
+    done 3<$matrix_left 4<$matrix_right
+
+    #oneline1="TMP1"
+    #oneline2="TMP2"
+    #newmatrix="TMP3"
+    #for (( i=1; i<="$cols_lmatrix"; i++ ))
+    #do
+        #cut -f"$i" $matrix_left > $oneline1
+        #cut -f"$i" $matrix_right > $oneline2
+        #while read -a word1 <&3 && read -a word2 <&4
+        #do
+            #echo "$word1 $word2"
+            #sum=`expr $word1 + $word2`
+            ##echo "sum: $sum"
+            #echo $sum >> $newmatrix
+        #done 3<$oneline1 4<$oneline2
+    ##echo >> $newmatrix
+    ##cut -f"$i" $newmatrix | paste -s
+    ##m -f "$newmatrix"
+    ##echo "next column"
+    #done
+
+    #rm -f "$oneline1"
+    #rm -f "$oneline2"
+}
+
+$1 $datafilepath
+
+            

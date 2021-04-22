@@ -1,0 +1,1 @@
+{ "version": "0.2.0", "configurations": [ { "name": "clang++ build and debug active file", "type": "lldb", "request": "launch", "program": "output", "args": [], // "stopAtEntry": false, "cwd": "${workspaceFolder}", // "environment": [], // "externalConsole": false
